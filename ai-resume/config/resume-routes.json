@@ -1,0 +1,55 @@
+[
+  {
+    "name": "resume_writing",
+    "description": "Resume summaries, about me text, professional profile writing, CV wording, recruiter-friendly writing.",
+    "primary_model": "Qwen/Qwen2.5-7B-Instruct",
+    "fallback_models": [
+      "mistralai/Mistral-7B-Instruct-v0.3",
+      "meta-llama/Llama-3.1-8B-Instruct"
+    ]
+  },
+  {
+    "name": "template_fit",
+    "description": "Shorten, compress, or rewrite text to fit a strict template box, max characters, line count, or field space.",
+    "primary_model": "Qwen/Qwen2.5-7B-Instruct",
+    "fallback_models": [
+      "google/gemma-2-9b-it",
+      "mistralai/Mistral-7B-Instruct-v0.3"
+    ]
+  },
+  {
+    "name": "ats_optimization",
+    "description": "ATS-friendly resume rewriting, keyword optimization, professional bullet points, achievement-focused wording.",
+    "primary_model": "Qwen/Qwen2.5-7B-Instruct",
+    "fallback_models": [
+      "mistralai/Mistral-7B-Instruct-v0.3",
+      "meta-llama/Llama-3.1-8B-Instruct"
+    ]
+  },
+  {
+    "name": "project_description",
+    "description": "Developer portfolio project descriptions, GitHub project wording, tech stack explanation, deployment descriptions.",
+    "primary_model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "fallback_models": [
+      "Qwen/Qwen2.5-7B-Instruct",
+      "mistralai/Mistral-7B-Instruct-v0.3"
+    ]
+  },
+  {
+    "name": "arabic_english",
+    "description": "Arabic and English rewriting, bilingual CV wording, translation, grammar correction, professional tone.",
+    "primary_model": "Qwen/Qwen2.5-7B-Instruct",
+    "fallback_models": [
+      "mistralai/Mistral-7B-Instruct-v0.3",
+      "google/gemma-2-9b-it"
+    ]
+  },
+  {
+    "name": "casual_conversation",
+    "description": "General assistant responses and simple questions.",
+    "primary_model": "Qwen/Qwen2.5-7B-Instruct",
+    "fallback_models": [
+      "mistralai/Mistral-7B-Instruct-v0.3"
+    ]
+  }
+]
