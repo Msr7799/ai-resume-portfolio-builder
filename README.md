@@ -262,3 +262,23 @@ src/
 ## License
 
 License placeholder. Add your preferred license before publishing.
+
+## Canva template editing model
+
+This project supports Canva-based resume templates with a safe editable overlay model:
+
+- Canva thumbnail images are used in the template gallery.
+- Export/preview uses a clean background without baked-in personal data.
+- User data, section headings, profile image, QR, and links are rendered by the app.
+- Users can hide sections, rename section headings, edit field content, and adjust field styling.
+- PDF export uses `@react-pdf/renderer`, so links and QR remain clickable.
+
+To add a new Canva template:
+
+1. Design an A4 CV in Canva.
+2. Export a thumbnail PNG and place it in `public/templates`.
+3. Create a clean background PNG without personal data and place it in `public/templates`.
+4. Register the template in `src/templates/resume-template-registry.ts`.
+5. Adjust `x`, `y`, `width`, and `height` for each field.
+
+Avoid using a Canva PNG with baked-in user text as the final PDF background because the app cannot erase old text from pixels.

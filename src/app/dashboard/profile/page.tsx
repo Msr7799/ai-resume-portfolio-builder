@@ -8,7 +8,7 @@ export default function ProfilePage() {
       <SectionHeader
         eyebrow="الحساب"
         title="بروفايل المستخدم"
-        description="تحديث بيانات المستخدم، الصورة، الدور، وحفظ نسخ السيرة والبورتفوليو في MongoDB."
+        description="تحديث بيانات المستخدم والصورة وحفظ نسخ من السيرة والبورتفوليو داخل حسابك."
       />
       <ProfileManager />
       <LibraryManager />

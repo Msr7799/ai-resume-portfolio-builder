@@ -167,7 +167,7 @@ export const mockResume: Resume = {
     },
   ],
   templateData: {
-    profileImage: "",
+    profileImage: "/profile-placeholder.png",
     fullName: "Sara Ahmed",
     jobTitle: "Junior Frontend Developer",
     phone: "+973 3333 0000",
@@ -192,6 +192,15 @@ export const mockResume: Resume = {
     githubUrl: "https://github.com/sara-dev",
     linkedinUrl: "https://linkedin.com/in/sara-dev",
     qr: "https://sara.dev",
+  },
+  templateFieldStates: {
+    about: { label: "ABOUT ME", style: { bold: true } },
+    workExperience: { label: "WORK EXPERIENCE", style: { bullets: true } },
+    education: { label: "EDUCATION", style: { bullets: false } },
+    expertise: { label: "EXPERTISE" },
+    skills: { label: "Skills", style: { bullets: false } },
+    languages: { label: "LANGUAGES", style: { bullets: false } },
+    deployments: { label: "DEPLOYMENT", style: { bullets: false } },
   },
 };
 

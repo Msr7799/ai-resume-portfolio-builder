@@ -9,27 +9,28 @@ type SignUpBody = {
   username?: string;
   email?: string;
   password?: string;
-  role?: string;
 };
-
-function usernameFromEmail(email: string) {
-  return email.split("@")[0]?.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase() || "user";
-}
 
 export async function POST(request: Request) {
   const body = (await request.json()) as SignUpBody;
   const name = body.name?.trim() ?? "";
   const email = body.email?.trim().toLowerCase() ?? "";
   const password = body.password ?? "";
-  const username = (body.username?.trim() || usernameFromEmail(email)).toLowerCase();
-  // Public sign-up must never trust a client-provided role.
-  const role = "user" as const;
+  const username = body.username?.trim().toLowerCase() ?? "";
 
   if (name.length < 2) return apiError("Name must be at least 2 characters.");
   if (!email.includes("@")) return apiError("Use a valid email address.");
   if (password.length < 8) return apiError("Password must be at least 8 characters.");
+  if (username.length < 2) return apiError("Username must be at least 2 characters.");
+  if (!/^[a-z0-9_-]+$/.test(username)) {
+    return apiError("Username can only contain letters, numbers, underscores, and dashes.");
+  }
 
   const users = await usersCollection();
+  const existing = await users.findOne({ $or: [{ email }, { username }] }, { projection: { email: 1, username: 1 } });
+  if (existing?.email === email) return apiError("Email already exists.", 409);
+  if (existing?.username === username) return apiError("Username already exists.", 409);
+
   const now = new Date();
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
       username,
       email,
       passwordHash,
-      role,
+      role: "user",
       createdAt: now,
       updatedAt: now,
       lastLoginAt: now,

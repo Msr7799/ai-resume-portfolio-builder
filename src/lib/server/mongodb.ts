@@ -14,6 +14,8 @@ export type UserDocument = {
   username: string;
   email: string;
   passwordHash: string;
+  passwordResetTokenHash?: string;
+  passwordResetTokenExpiresAt?: Date;
   role: UserRole;
   avatarUrl?: string;
   avatarAsset?: CloudinaryAsset;

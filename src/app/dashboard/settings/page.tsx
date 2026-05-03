@@ -29,7 +29,7 @@ export default function SettingsPage() {
       <SectionHeader
         eyebrow="الحساب"
         title="الإعدادات"
-        description="إعدادات الملف الشخصي. يمكن ربط مصادقة حقيقية لاحقًا بدون تغيير صفحات المنتج."
+        description="إعدادات الملف الشخصي وطريقة ظهور بياناتك داخل التطبيق."
       />
       <Card className="max-w-2xl space-y-4">
         <label className="block space-y-2">
@@ -50,13 +50,6 @@ export default function SettingsPage() {
             onChange={(event) => setUser({ ...user, email: event.target.value })}
           />
         </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold">الدور</span>
-          <Input
-            value={user.role}
-            onChange={(event) => setUser({ ...user, role: event.target.value })}
-          />
-        </label>
         {message ? <p className="text-sm font-medium text-emerald-600">{message}</p> : null}
         <div className="flex flex-wrap gap-2">
           <Button onClick={save}>
@@ -68,10 +61,6 @@ export default function SettingsPage() {
             إعادة ضبط البيانات التجريبية
           </Button>
         </div>
-        <p className="text-xs leading-5 text-slate-500">
-          TODO: اربط Firebase Auth أو Supabase Auth أو NextAuth هنا لاحقًا. لا تعرض مفاتيح
-          الخدمات داخل كود العميل.
-        </p>
       </Card>
     </div>
   );

@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import type { AuthUser, UserRole } from "@/types/auth";
+import type { AuthUser } from "@/types/auth";
 
 type UserResponse = {
   user: AuthUser | null;
@@ -60,7 +59,7 @@ export function ProfileManager() {
     const confirmed = window.confirm("هل أنت متأكد؟ سيتم حذف الحساب وكل السير والبورتفوليو المحفوظة.");
     if (!confirmed) return;
     await fetch("/api/profile", { method: "DELETE" });
-    window.location.href = "/auth/sign-up";
+    window.location.href = "/auth/sign-in";
   }
 
   async function uploadAvatar(file: File) {
@@ -77,11 +76,11 @@ export function ProfileManager() {
       const data = (await response.json()) as UserResponse;
       setUploadingAvatar(false);
       if (!response.ok || !data.user) {
-        setError(data.error ?? "تعذر رفع الصورة إلى Cloudinary.");
+        setError(data.error ?? "تعذر رفع الصورة.");
         return;
       }
       setUser(data.user);
-      setMessage("تم رفع صورة المستخدم إلى Cloudinary.");
+      setMessage("تم رفع صورة المستخدم.");
     };
     reader.onerror = () => {
       setUploadingAvatar(false);
@@ -116,9 +115,7 @@ export function ProfileManager() {
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-950 dark:text-white">{user.name}</h2>
-          <p className="text-sm text-slate-500 dark:text-zinc-400">
-            {user.email} · {user.role}
-          </p>
+          <p className="text-sm text-slate-500 dark:text-zinc-400">{user.email}</p>
           <p className="text-xs text-slate-400">
             آخر تسجيل دخول:{" "}
             {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("ar") : "غير مسجل"}
@@ -139,20 +136,11 @@ export function ProfileManager() {
         <Field label="البريد الإلكتروني">
           <Input value={user.email} onChange={(event) => setUser({ ...user, email: event.target.value })} />
         </Field>
-        <Field label="الدور">
-          <Select
-            value={user.role}
-            onChange={(event) => setUser({ ...user, role: event.target.value as UserRole })}
-          >
-            <option value="user">مستخدم</option>
-            <option value="admin">أدمن</option>
-          </Select>
-        </Field>
       </div>
 
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 p-4 text-sm font-medium text-slate-500 transition hover:border-blue-500 dark:border-zinc-800 dark:text-zinc-400">
         <Upload className="size-4 text-blue-500" />
-        {uploadingAvatar ? "جاري رفع الصورة..." : "تحديث صورة المستخدم عبر Cloudinary"}
+        {uploadingAvatar ? "جاري رفع الصورة..." : "تحديث صورة المستخدم"}
         <input
           className="sr-only"
           type="file"

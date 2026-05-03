@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Download, FolderClock, Save } from "lucide-react";
+import { Archive, Download, FolderClock, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -78,12 +78,12 @@ export function LibraryManager() {
     <Card className="space-y-5">
       <div className="flex items-start gap-3">
         <span className="grid size-11 place-items-center rounded-lg bg-blue-500/10 text-blue-500">
-          <Database className="size-5" />
+          <Archive className="size-5" />
         </span>
         <div>
-          <h2 className="font-bold text-slate-950 dark:text-white">Storage للحساب</h2>
+          <h2 className="font-bold text-slate-950 dark:text-white">محفوظات الحساب</h2>
           <p className="text-sm text-slate-500 dark:text-zinc-400">
-            احفظ نسخ سابقة من السيرة والبورتفوليو في MongoDB بدل الاعتماد على localStorage فقط.
+            احفظ نسخ سابقة من السيرة والبورتفوليو للرجوع إليها لاحقًا.
           </p>
         </div>
       </div>
@@ -153,7 +153,7 @@ function HistoryList({
                   rel="noreferrer"
                 >
                   <Download className="size-3" />
-                  فتح PDF من Cloudinary
+                  فتح ملف PDF
                 </a>
               ) : null}
             </div>

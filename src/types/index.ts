@@ -100,6 +100,7 @@ export type Resume = {
   languages: Language[];
   links: SocialLink[];
   templateData?: import("@/types/template").CanvaTemplateData;
+  templateFieldStates?: import("@/types/template").CanvaTemplateFieldStates;
 };
 
 export type PortfolioSection = {

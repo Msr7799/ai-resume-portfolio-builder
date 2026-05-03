@@ -46,8 +46,8 @@ export function ResumeForm({
     onChange({ ...draft, status: completion > 80 ? "Ready" : "Draft" });
     setMessage(
       isArabic
-        ? "تم الحفظ محليًا. تخزين المتصفح هو قاعدة بيانات نسخة MVP."
-        : "Saved locally. Your browser storage is the MVP database.",
+        ? "تم حفظ التغييرات على هذا الجهاز."
+        : "Changes saved on this device.",
     );
     window.setTimeout(() => setMessage(""), 2400);
   }

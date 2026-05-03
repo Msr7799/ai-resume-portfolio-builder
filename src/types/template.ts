@@ -31,25 +31,10 @@ export type CanvaTemplateLinkType =
   | "project"
   | "custom";
 
-export type CanvaTemplateFieldSourceKey =
-  | "profileImage"
-  | "fullName"
-  | "jobTitle"
-  | "phone"
-  | "email"
-  | "location"
-  | "about"
-  | "workExperience"
-  | "developerExperience"
-  | "education"
-  | "expertise"
-  | "skills"
-  | "languages"
-  | "deployments"
-  | "portfolioUrl"
-  | "githubUrl"
-  | "linkedinUrl"
-  | "qr";
+// Custom Canva templates often need extra fields that do not map 1:1 to the
+// standard resume model. Keep this as string so each template can define its
+// own editable fields without changing TypeScript every time.
+export type CanvaTemplateFieldSourceKey = string;
 
 export type CanvaTemplateField = {
   id: string;
@@ -69,6 +54,16 @@ export type CanvaTemplateField = {
   aiMode?: AIImproveIntent | "fit-template-space";
   sourceKey: CanvaTemplateFieldSourceKey;
   linkType?: CanvaTemplateLinkType;
+
+  // When true, the resume renders an editable section heading above the field
+  // content. The user can rename or hide the whole section from the editor.
+  showLabel?: boolean;
+  defaultEnabled?: boolean;
+  placeholderImage?: string;
+  backgroundColor?: string;
+  borderColor?: string;
+  borderRadius?: number;
+  zIndex?: number;
 };
 
 export type CanvaResumeTemplate = {
@@ -84,9 +79,43 @@ export type CanvaResumeTemplate = {
 
 export type CanvaTemplateValue = string | string[];
 
-export type CanvaTemplateData = Partial<
-  Record<CanvaTemplateFieldSourceKey, CanvaTemplateValue>
->;
+export type CanvaTemplateData = Partial<Record<CanvaTemplateFieldSourceKey, CanvaTemplateValue>>;
+
+export type CanvaTemplateFieldStyle = {
+  fontSize?: number;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  bullets?: boolean;
+  autoFit?: boolean;
+  lineHeight?: number;
+  fontFamily?: string;
+  strike?: boolean;
+  align?: "left" | "center" | "right" | "justify";
+  textTransform?: "none" | "uppercase" | "lowercase";
+};
+
+export type CanvaTemplateFieldLayout = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  zIndex?: number;
+};
+
+export type CanvaTemplateFieldState = {
+  enabled?: boolean;
+  label?: string;
+  style?: CanvaTemplateFieldStyle;
+  layout?: CanvaTemplateFieldLayout;
+  groupId?: string;
+  linkOverride?: string;
+  locked?: boolean;
+  richTextHtml?: string;
+};
+
+export type CanvaTemplateFieldStates = Record<string, CanvaTemplateFieldState>;
 
 export type CanvaTemplateValidationIssue = {
   fieldId: string;
