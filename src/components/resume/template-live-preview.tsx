@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type {
   CSSProperties,
+  FocusEvent as ReactFocusEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
@@ -452,7 +453,7 @@ function normalizeEditorHtml(html: string) {
     .replace(/<\/div>/g, "");
 }
 
-function selectionInside(element: HTMLElement | null) {
+function selectionInside(element: HTMLElement | null): element is HTMLElement {
   if (!element) return false;
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return false;
@@ -682,7 +683,7 @@ export function TemplateLivePreview({
     });
   }
 
-  function editSelectedLink() {
+  function editSelectedFieldLink() {
     if (!onFieldStateChange || selectedFieldIds.length !== 1) return;
     const field = fieldsById[selectedFieldIds[0]];
     if (!field) return;
@@ -862,7 +863,7 @@ export function TemplateLivePreview({
     persistEditorHtml(field);
   }
 
-  function editSelectedLink() {
+  function editSelectedTextLink() {
     const payload = selectionPayload();
     if (!payload) return;
     const href = window.prompt(
@@ -924,36 +925,40 @@ export function TemplateLivePreview({
 
   useEffect(() => {
     if (!interaction || !previewRef.current || !onFieldLayoutChange) return;
+    const activeInteraction = interaction;
+    const applyLayoutChange = onFieldLayoutChange;
 
     function onMove(event: MouseEvent) {
       const rect = previewRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const deltaX = ((event.clientX - interaction.startX) / rect.width) * 100;
-      const deltaY = ((event.clientY - interaction.startY) / rect.height) * 100;
+      const deltaX =
+        ((event.clientX - activeInteraction.startX) / rect.width) * 100;
+      const deltaY =
+        ((event.clientY - activeInteraction.startY) / rect.height) * 100;
 
-      if (interaction.mode === "move") {
-        interaction.selectedIds.forEach((id) => {
+      if (activeInteraction.mode === "move") {
+        activeInteraction.selectedIds.forEach((id) => {
           const field = fieldsById[id];
-          const start = interaction.startLayouts[id];
+          const start = activeInteraction.startLayouts[id];
           if (!field || !start) return;
           const nextLayout = {
             ...start,
             x: roundLayout(clamp(start.x + deltaX, 0, 100 - start.width)),
             y: roundLayout(clamp(start.y + deltaY, 0, 100 - start.height)),
           };
-          onFieldLayoutChange(field, nextLayout);
+          applyLayoutChange(field, nextLayout);
         });
         return;
       }
 
-      const start = interaction.startLayouts[interaction.field.id];
+      const start = activeInteraction.startLayouts[activeInteraction.field.id];
       if (!start) return;
       const nextLayout = {
         ...start,
         width: roundLayout(clamp(start.width + deltaX, 3, 100 - start.x)),
         height: roundLayout(clamp(start.height + deltaY, 2, 100 - start.y)),
       };
-      onFieldLayoutChange(interaction.field, nextLayout);
+      applyLayoutChange(activeInteraction.field, nextLayout);
     }
 
     function onUp() {
@@ -1093,12 +1098,13 @@ export function TemplateLivePreview({
 
   useEffect(() => {
     if (!selectionBox || !previewRef.current) return;
+    const activeSelectionBox = selectionBox;
 
     function onMove(event: MouseEvent) {
       const rect = previewRef.current?.getBoundingClientRect();
       if (!rect) return;
       const point = eventToPercent(event, rect);
-      const nextBox = { ...selectionBox, endX: point.x, endY: point.y };
+      const nextBox = { ...activeSelectionBox, endX: point.x, endY: point.y };
       const selectionRect = selectionBoxToRect(nextBox);
       setSelectionBox(nextBox);
       setSelectedFieldIds(
@@ -1362,7 +1368,7 @@ export function TemplateLivePreview({
           </ToolbarButton>
           <ToolbarButton
             title="Edit selected text link"
-            onClick={editSelectedLink}
+            onClick={editSelectedTextLink}
           >
             <LinkIcon className="size-4" />
           </ToolbarButton>
@@ -1561,7 +1567,7 @@ export function TemplateLivePreview({
                 onMouseUp: () => saveCurrentSelection(field.id),
                 onKeyUp: () => saveCurrentSelection(field.id),
                 onInput: () => saveCurrentSelection(field.id),
-                onBlur: (event) => {
+                onBlur: (event: ReactFocusEvent<HTMLDivElement>) => {
                   const nextFocus = event.relatedTarget as Node | null;
                   if (nextFocus && toolbarRef.current?.contains(nextFocus)) {
                     saveCurrentSelection(field.id);
@@ -1714,7 +1720,7 @@ export function TemplateLivePreview({
               <MenuItem
                 icon={<LinkIcon className="size-4" />}
                 label={isArabic ? "Edit link" : "Edit link"}
-                onClick={editSelectedLink}
+                onClick={editSelectedFieldLink}
               />
             </>
           ) : null}

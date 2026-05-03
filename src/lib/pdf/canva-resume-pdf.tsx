@@ -110,6 +110,13 @@ function fitPdfFontSize({
   return Math.max(4.2, fontSize);
 }
 
+function pdfTextDecoration(underline: boolean, strike: boolean) {
+  if (underline && strike) return "underline line-through" as const;
+  if (underline) return "underline" as const;
+  if (strike) return "line-through" as const;
+  return "none" as const;
+}
+
 function absoluteFieldStyle(resume: Resume, field: CanvaTemplateField, value: CanvaTemplateValue) {
   const styleState = getEffectiveFieldStyle(resume, field);
   const layout = getEffectiveFieldLayout(resume, field);
@@ -134,8 +141,8 @@ function absoluteFieldStyle(resume: Resume, field: CanvaTemplateField, value: Ca
     color: styleState.color,
     textAlign: styleState.align,
     fontWeight: styleState.bold ? 700 : 400,
-    fontStyle: styleState.italic ? "italic" : "normal",
-    textDecoration: `${styleState.underline ? "underline" : ""} ${styleState.strike ? "line-through" : ""}`.trim() || "none",
+    fontStyle: styleState.italic ? ("italic" as const) : ("normal" as const),
+    textDecoration: pdfTextDecoration(styleState.underline, styleState.strike),
     fontFamily: styleState.fontFamily === "Times New Roman" ? "Times-Roman" : "Helvetica",
     lineHeight: styleState.lineHeight,
     textTransform: styleState.textTransform,
