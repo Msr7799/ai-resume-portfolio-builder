@@ -10,26 +10,31 @@ type SignInBody = {
 };
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as SignInBody;
-  const email = body.email?.trim().toLowerCase() ?? "";
-  const password = body.password ?? "";
+  try {
+    const body = (await request.json()) as SignInBody;
+    const email = body.email?.trim().toLowerCase() ?? "";
+    const password = body.password ?? "";
 
-  if (!email.includes("@") || password.length < 8) {
-    return apiError("Invalid email or password.", 401);
+    if (!email.includes("@") || password.length < 8) {
+      return apiError("Invalid email or password.", 401);
+    }
+
+    const users = await usersCollection();
+    const user = await users.findOne({ email });
+    if (!user) return apiError("Invalid email or password.", 401);
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return apiError("Invalid email or password.", 401);
+
+    const now = new Date();
+    await users.updateOne({ _id: user._id }, { $set: { lastLoginAt: now, updatedAt: now } });
+    const updated = await users.findOne({ _id: user._id });
+    if (!updated) return apiError("User session failed.", 500);
+
+    await setSessionCookie({ userId: String(updated._id), email: updated.email, role: updated.role });
+    return NextResponse.json({ user: toAuthUser(updated) });
+  } catch (error) {
+    console.error("Sign in failed:", error);
+    return apiError("Authentication service is unavailable.", 503);
   }
-
-  const users = await usersCollection();
-  const user = await users.findOne({ email });
-  if (!user) return apiError("Invalid email or password.", 401);
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return apiError("Invalid email or password.", 401);
-
-  const now = new Date();
-  await users.updateOne({ _id: user._id }, { $set: { lastLoginAt: now, updatedAt: now } });
-  const updated = await users.findOne({ _id: user._id });
-  if (!updated) return apiError("User session failed.", 500);
-
-  await setSessionCookie({ userId: String(updated._id), email: updated.email, role: updated.role });
-  return NextResponse.json({ user: toAuthUser(updated) });
 }

@@ -12,29 +12,29 @@ type SignUpBody = {
 };
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as SignUpBody;
-  const name = body.name?.trim() ?? "";
-  const email = body.email?.trim().toLowerCase() ?? "";
-  const password = body.password ?? "";
-  const username = body.username?.trim().toLowerCase() ?? "";
-
-  if (name.length < 2) return apiError("Name must be at least 2 characters.");
-  if (!email.includes("@")) return apiError("Use a valid email address.");
-  if (password.length < 8) return apiError("Password must be at least 8 characters.");
-  if (username.length < 2) return apiError("Username must be at least 2 characters.");
-  if (!/^[a-z0-9_-]+$/.test(username)) {
-    return apiError("Username can only contain letters, numbers, underscores, and dashes.");
-  }
-
-  const users = await usersCollection();
-  const existing = await users.findOne({ $or: [{ email }, { username }] }, { projection: { email: 1, username: 1 } });
-  if (existing?.email === email) return apiError("Email already exists.", 409);
-  if (existing?.username === username) return apiError("Username already exists.", 409);
-
-  const now = new Date();
-  const passwordHash = await bcrypt.hash(password, 12);
-
   try {
+    const body = (await request.json()) as SignUpBody;
+    const name = body.name?.trim() ?? "";
+    const email = body.email?.trim().toLowerCase() ?? "";
+    const password = body.password ?? "";
+    const username = body.username?.trim().toLowerCase() ?? "";
+
+    if (name.length < 2) return apiError("Name must be at least 2 characters.");
+    if (!email.includes("@")) return apiError("Use a valid email address.");
+    if (password.length < 8) return apiError("Password must be at least 8 characters.");
+    if (username.length < 2) return apiError("Username must be at least 2 characters.");
+    if (!/^[a-z0-9_-]+$/.test(username)) {
+      return apiError("Username can only contain letters, numbers, underscores, and dashes.");
+    }
+
+    const users = await usersCollection();
+    const existing = await users.findOne({ $or: [{ email }, { username }] }, { projection: { email: 1, username: 1 } });
+    if (existing?.email === email) return apiError("Email already exists.", 409);
+    if (existing?.username === username) return apiError("Username already exists.", 409);
+
+    const now = new Date();
+    const passwordHash = await bcrypt.hash(password, 12);
+
     const inserted = await users.insertOne({
       name,
       username,
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     if (isDuplicateKeyError(error)) {
       return apiError("Email or username already exists.", 409);
     }
-    return apiError("Sign up failed.", 500);
+    console.error("Sign up failed:", error);
+    return apiError("Authentication service is unavailable.", 503);
   }
 }
