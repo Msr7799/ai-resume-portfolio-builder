@@ -51,12 +51,33 @@ function mongoUri() {
   return uri;
 }
 
+function connectMongoClient() {
+  return new MongoClient(mongoUri(), {
+    serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS ?? 10000),
+  }).connect();
+}
+
 export async function getMongoClient() {
   const globalForMongo = globalThis as MongoGlobal;
   if (!globalForMongo.__airpbMongoClient) {
-    globalForMongo.__airpbMongoClient = new MongoClient(mongoUri()).connect();
+    globalForMongo.__airpbMongoClient = connectMongoClient();
   }
-  return globalForMongo.__airpbMongoClient;
+
+  try {
+    return await globalForMongo.__airpbMongoClient;
+  } catch (error) {
+    // A transient Atlas/TLS failure can reject the cached promise. Drop it so
+    // the next local dev request can create a fresh connection instead of
+    // reusing the same failed promise forever.
+    globalForMongo.__airpbMongoClient = undefined;
+    globalForMongo.__airpbMongoClient = connectMongoClient();
+    try {
+      return await globalForMongo.__airpbMongoClient;
+    } catch {
+      globalForMongo.__airpbMongoClient = undefined;
+      throw error;
+    }
+  }
 }
 
 export async function getDb(): Promise<Db> {
