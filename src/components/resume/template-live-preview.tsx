@@ -727,15 +727,18 @@ export function TemplateLivePreview({
     };
   }
 
-  function updateSelectedZ(action: "front" | "forward" | "backward" | "back") {
-    if (!onFieldStateChange || selectedFieldIds.length === 0) return;
+  function updateSelectedZ(
+    action: "front" | "forward" | "backward" | "back",
+    targetIds = selectedFieldIds,
+  ) {
+    if (!onFieldStateChange || targetIds.length === 0) return;
     const layouts = enabledFields.map((field) =>
       getEffectiveFieldLayout(resume, field),
     );
     const maxZ = Math.max(...layouts.map((layout) => layout.zIndex), 1);
     const minZ = Math.min(...layouts.map((layout) => layout.zIndex), 1);
 
-    selectedFieldIds.forEach((id, index) => {
+    targetIds.forEach((id, index) => {
       const field = fieldsById[id];
       if (!field) return;
       const layout = getEffectiveFieldLayout(resume, field);
@@ -749,30 +752,34 @@ export function TemplateLivePreview({
               : Math.max(1, layout.zIndex - 1);
       onFieldStateChange(field, { layout: { zIndex: nextZ } });
     });
+    setContextMenu(null);
   }
 
-  function groupSelection() {
-    if (!onFieldStateChange || selectedFieldIds.length < 2) return;
+  function groupSelection(targetIds = selectedFieldIds) {
+    if (!onFieldStateChange || targetIds.length < 2) return;
     groupCounterRef.current += 1;
     const groupId = `group-${groupCounterRef.current}`;
-    selectedFieldIds.forEach((id) => {
+    targetIds.forEach((id) => {
       const field = fieldsById[id];
       if (field) onFieldStateChange(field, { groupId });
     });
+    setContextMenu(null);
   }
 
-  function ungroupSelection() {
-    if (!onFieldStateChange || selectedFieldIds.length === 0) return;
-    selectedFieldIds.forEach((id) => {
+  function ungroupSelection(targetIds = selectedFieldIds) {
+    if (!onFieldStateChange || targetIds.length === 0) return;
+    targetIds.forEach((id) => {
       const field = fieldsById[id];
       if (field) onFieldStateChange(field, { groupId: undefined });
     });
+    setContextMenu(null);
   }
 
-  async function editSelectedFieldLink() {
-    if (!onFieldStateChange || selectedFieldIds.length !== 1) return;
-    const field = fieldsById[selectedFieldIds[0]];
-    if (!field) return;
+  async function editSelectedFieldLink(fieldOverride?: CanvaTemplateField) {
+    const field =
+      fieldOverride ??
+      (selectedFieldIds.length === 1 ? fieldsById[selectedFieldIds[0]] : undefined);
+    if (!onFieldStateChange || !field) return;
     const current = getTemplateFieldState(resume, field).linkOverride ?? "";
     const next = await showPrompt(
       isArabic
@@ -783,17 +790,19 @@ export function TemplateLivePreview({
     );
     if (next === null) return;
     onFieldStateChange(field, { linkOverride: next.trim() || undefined });
+    setContextMenu(null);
   }
 
-  function clearSelectedContent() {
+  function clearSelectedContent(targetIds = selectedFieldIds) {
     if (!onFieldValueClear) return;
-    selectedFieldIds.forEach((id) => {
+    targetIds.forEach((id) => {
       const field = fieldsById[id];
       if (field) {
         onFieldValueClear(field);
         onFieldStateChange?.(field, { richTextHtml: undefined });
       }
     });
+    setContextMenu(null);
   }
 
   function requestImageUpload(field: CanvaTemplateField) {
@@ -1301,18 +1310,22 @@ export function TemplateLivePreview({
       getEffectiveFieldLayout(resume, a).zIndex -
       getEffectiveFieldLayout(resume, b).zIndex,
   );
-  const canGroup = selectedFieldIds.length > 1;
   const selectedRichField =
     selectedFieldIds.map((id) => fieldsById[id]).find((field) => field && isTextEditableField(field)) ??
     (activeRichFieldId ? fieldsById[activeRichFieldId] : undefined);
   const selectedRichStyle = selectedRichField
     ? getEffectiveFieldStyle(resume, selectedRichField)
     : undefined;
-  const selectedHasGroup = selectedFieldIds.some((id) => {
+  const contextField = contextMenu ? fieldsById[contextMenu.fieldId] : undefined;
+  const contextTargetIds =
+    contextField && !selectedFieldIds.includes(contextField.id)
+      ? getFieldGroupIds(contextField)
+      : selectedFieldIds;
+  const contextCanGroup = contextTargetIds.length > 1;
+  const contextHasGroup = contextTargetIds.some((id) => {
     const field = fieldsById[id];
     return Boolean(field && getTemplateFieldState(resume, field).groupId);
   });
-  const contextField = contextMenu ? fieldsById[contextMenu.fieldId] : undefined;
 
   return (
     <>
@@ -1934,7 +1947,7 @@ export function TemplateLivePreview({
           <MenuItem
             icon={<Trash2 className="size-4" />}
             label={isArabic ? "مسح المحتوى" : "Clear content"}
-            onClick={clearSelectedContent}
+            onClick={() => clearSelectedContent(contextTargetIds)}
           />
           {contextField?.type === "image" ? (
             <MenuItem
@@ -1945,48 +1958,48 @@ export function TemplateLivePreview({
               }}
             />
           ) : null}
-          {canGroup ? (
+          {contextCanGroup ? (
             <MenuItem
               icon={<Group className="size-4" />}
               label={isArabic ? "Group" : "Group"}
-              onClick={groupSelection}
+              onClick={() => groupSelection(contextTargetIds)}
             />
           ) : null}
-          {selectedHasGroup ? (
+          {contextHasGroup ? (
             <MenuItem
               icon={<Ungroup className="size-4" />}
               label={isArabic ? "Ungroup" : "Ungroup"}
-              onClick={ungroupSelection}
+              onClick={() => ungroupSelection(contextTargetIds)}
             />
           ) : null}
           <div className="my-1 h-px bg-slate-100 dark:bg-white/10" />
           <MenuItem
             icon={<ArrowUpToLine className="size-4" />}
             label={isArabic ? "Bring to front" : "Bring to front"}
-            onClick={() => updateSelectedZ("front")}
+            onClick={() => updateSelectedZ("front", contextTargetIds)}
           />
           <MenuItem
             icon={<ArrowUp className="size-4" />}
             label={isArabic ? "Bring forward" : "Bring forward"}
-            onClick={() => updateSelectedZ("forward")}
+            onClick={() => updateSelectedZ("forward", contextTargetIds)}
           />
           <MenuItem
             icon={<ArrowDown className="size-4" />}
             label={isArabic ? "Send backward" : "Send backward"}
-            onClick={() => updateSelectedZ("backward")}
+            onClick={() => updateSelectedZ("backward", contextTargetIds)}
           />
           <MenuItem
             icon={<ArrowDownToLine className="size-4" />}
             label={isArabic ? "Send to back" : "Send to back"}
-            onClick={() => updateSelectedZ("back")}
+            onClick={() => updateSelectedZ("back", contextTargetIds)}
           />
-          {selectedFieldIds.length === 1 ? (
+          {contextTargetIds.length === 1 && contextField ? (
             <>
               <div className="my-1 h-px bg-slate-100 dark:bg-white/10" />
               <MenuItem
                 icon={<LinkIcon className="size-4" />}
                 label={isArabic ? "Edit link" : "Edit link"}
-                onClick={editSelectedFieldLink}
+                onClick={() => editSelectedFieldLink(contextField)}
               />
             </>
           ) : null}
