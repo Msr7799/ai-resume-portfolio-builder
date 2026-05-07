@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useLanguage } from "@/components/layout/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getPortfolioTheme } from "@/templates/portfolio-template-registry";
+import { cn } from "@/lib/utils";
 import type { Portfolio, Resume } from "@/types";
 
 export function PortfolioPreview({
@@ -12,21 +14,26 @@ export function PortfolioPreview({
   publicMode = false,
 }: {
   portfolio: Portfolio;
-  resume: Resume;
+  resume?: Resume;
   publicMode?: boolean;
 }) {
   const { locale } = useLanguage();
   const isArabic = locale === "ar";
-  const projects = resume.projects.filter((project) =>
+  const theme = getPortfolioTheme(portfolio.templateId);
+  const personalInfo = resume?.personalInfo ?? { email: "", github: "", linkedin: "" } as Resume["personalInfo"];
+  const skills = resume?.skills ?? [];
+  const experience = resume?.experience ?? [];
+  const education = resume?.education ?? [];
+  const projects = (resume?.projects ?? []).filter((project) =>
     portfolio.featuredProjectIds.includes(project.id),
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm dark:border-white/10 dark:bg-slate-950 dark:text-white">
-      <section className="relative border-b border-slate-200 px-5 py-12 dark:border-white/10 md:px-10">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_35%)]" />
+    <div className={cn("overflow-hidden rounded-lg border shadow-sm", theme.pageBg, theme.borderColor)}>
+      <section className={cn("relative border-b px-5 py-12 md:px-10", theme.borderColor)}>
+        <div className={cn("absolute inset-0", theme.heroGradient)} />
         <div className="relative max-w-3xl">
-          <Badge>
+          <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold", theme.accentBg, theme.accentText)}>
             {portfolio.published
               ? isArabic
                 ? "ملف منشور"
@@ -34,47 +41,55 @@ export function PortfolioPreview({
               : isArabic
                 ? "مسودة"
                 : "Draft profile"}
-          </Badge>
-          <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-6xl">
+          </span>
+          <h1 className={cn("mt-5 text-4xl font-bold tracking-tight md:text-6xl", theme.textPrimary)}>
             {portfolio.headline}
           </h1>
-          <p className="mt-5 text-lg leading-8 text-slate-600 dark:text-slate-300">
+          <p className={cn("mt-5 text-lg leading-8", theme.textSecondary)}>
             {portfolio.subheadline}
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <Button href={`mailto:${resume.personalInfo.email}`}>
-              {isArabic ? "راسلني" : "Email me"}
-            </Button>
-            <Button href={resume.personalInfo.github} variant="secondary">
-              GitHub
-            </Button>
-            <Button href={resume.personalInfo.linkedin} variant="ghost">
-              LinkedIn
-            </Button>
+            {personalInfo.email ? (
+              <a href={`mailto:${personalInfo.email}`} className={cn("inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition", theme.buttonPrimary)}>
+                {isArabic ? "راسلني" : "Email me"}
+              </a>
+            ) : null}
+            {personalInfo.github ? (
+              <a href={personalInfo.github} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition", theme.buttonSecondary)}>
+                GitHub
+              </a>
+            ) : null}
+            {personalInfo.linkedin ? (
+              <a href={personalInfo.linkedin} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition", theme.buttonSecondary)}>
+                LinkedIn
+              </a>
+            ) : null}
           </div>
         </div>
       </section>
 
-      <section className="grid gap-8 px-5 py-10 md:grid-cols-[0.8fr_1.2fr] md:px-10">
+      <section className={cn("grid gap-8 px-5 py-10 md:grid-cols-[0.8fr_1.2fr] md:px-10")}>
         <div>
-          <h2 className="text-xl font-bold">{isArabic ? "نبذة" : "About"}</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+          <h2 className={cn("text-xl font-bold", theme.textPrimary)}>{isArabic ? "نبذة" : "About"}</h2>
+          <p className={cn("mt-3 text-sm leading-7", theme.textSecondary)}>
             {portfolio.about}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            {resume.skills.map((skill) => (
-              <Badge key={skill.id}>{skill.name}</Badge>
+            {skills.map((skill) => (
+              <span key={skill.id} className={cn("inline-flex rounded-full border px-3 py-1 text-xs font-semibold", theme.accentBg, theme.accentText)}>
+                {skill.name}
+              </span>
             ))}
           </div>
         </div>
         <div className="space-y-5">
-          <h2 className="text-xl font-bold">
+          <h2 className={cn("text-xl font-bold", theme.textPrimary)}>
             {isArabic ? "المشاريع المميزة" : "Featured projects"}
           </h2>
           {projects.map((project) => (
             <article
               key={project.id}
-              className="overflow-hidden rounded-lg border border-slate-200 dark:border-white/10"
+              className={cn("overflow-hidden rounded-lg border", theme.cardBg)}
             >
               <div className="relative h-48">
                 <Image
@@ -86,13 +101,15 @@ export function PortfolioPreview({
                 />
               </div>
               <div className="p-4">
-                <h3 className="font-bold">{project.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                <h3 className={cn("font-bold", theme.textPrimary)}>{project.name}</h3>
+                <p className={cn("mt-2 text-sm leading-6", theme.textSecondary)}>
                   {project.description}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {project.techStack.map((tech) => (
-                    <Badge key={tech}>{tech}</Badge>
+                    <span key={tech} className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-medium", theme.accentBg, theme.accentText)}>
+                      {tech}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -101,34 +118,34 @@ export function PortfolioPreview({
         </div>
       </section>
 
-      <section className="grid gap-6 border-t border-slate-200 px-5 py-10 dark:border-white/10 md:grid-cols-2 md:px-10">
+      <section className={cn("grid gap-6 border-t px-5 py-10 md:grid-cols-2 md:px-10", theme.borderColor)}>
         <div>
-          <h2 className="text-xl font-bold">{isArabic ? "الخبرات" : "Experience"}</h2>
-          {resume.experience.map((experience) => (
-            <div key={experience.id} className="mt-4">
-              <p className="font-semibold">{experience.role}</p>
-              <p className="text-sm text-slate-500">
-                {experience.company} · {experience.startDate} -{" "}
-                {experience.current ? (isArabic ? "حتى الآن" : "Present") : experience.endDate}
+          <h2 className={cn("text-xl font-bold", theme.textPrimary)}>{isArabic ? "الخبرات" : "Experience"}</h2>
+          {experience.map((exp) => (
+            <div key={exp.id} className="mt-4">
+              <p className={cn("font-semibold", theme.textPrimary)}>{exp.role}</p>
+              <p className={cn("text-sm", theme.textSecondary)}>
+                {exp.company} · {exp.startDate} -{" "}
+                {exp.current ? (isArabic ? "حتى الآن" : "Present") : exp.endDate}
               </p>
             </div>
           ))}
         </div>
         <div>
-          <h2 className="text-xl font-bold">{isArabic ? "التعليم" : "Education"}</h2>
-          {resume.education.map((education) => (
-            <div key={education.id} className="mt-4">
-              <p className="font-semibold">
-                {education.degree} · {education.field}
+          <h2 className={cn("text-xl font-bold", theme.textPrimary)}>{isArabic ? "التعليم" : "Education"}</h2>
+          {education.map((edu) => (
+            <div key={edu.id} className="mt-4">
+              <p className={cn("font-semibold", theme.textPrimary)}>
+                {edu.degree} · {edu.field}
               </p>
-              <p className="text-sm text-slate-500">{education.school}</p>
+              <p className={cn("text-sm", theme.textSecondary)}>{edu.school}</p>
             </div>
           ))}
         </div>
       </section>
 
       {publicMode ? (
-        <footer className="border-t border-slate-200 px-5 py-6 text-sm text-slate-500 dark:border-white/10 md:px-10">
+        <footer className={cn("border-t px-5 py-6 text-sm", theme.borderColor, theme.textSecondary)}>
           {isArabic
             ? "بني باستخدام منشئ السيرة والبورتفوليو بالذكاء الاصطناعي."
             : "Built with AI Resume & Portfolio Builder."}

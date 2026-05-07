@@ -1,13 +1,45 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { useAppTheme } from "@/components/layout/theme-provider";
 import { useLanguage } from "@/components/layout/language-provider";
 import { cn } from "@/lib/utils";
 
+function subscribeToHydration(onStoreChange: () => void) {
+  const timeoutId = window.setTimeout(onStoreChange, 0);
+  return () => window.clearTimeout(timeoutId);
+}
+
+function getClientSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 export function ThemeToggle() {
   const { theme, resolvedTheme, toggleTheme } = useAppTheme();
   const { t, locale } = useLanguage();
+  const mounted = useSyncExternalStore(subscribeToHydration, getClientSnapshot, getServerSnapshot);
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        aria-label={locale === "ar" ? "تحميل خيار الثيم" : "Loading theme option"}
+        aria-disabled="true"
+        className={cn(
+          "inline-flex h-9 min-w-28 pointer-events-none items-center gap-2 rounded-lg border border-stone-200 bg-[#fffefa] px-3 text-xs font-semibold text-slate-700 shadow-sm",
+          "dark:border-zinc-800 dark:bg-[#1f1f1f] dark:text-zinc-100",
+        )}
+      >
+        <Monitor className="size-4 text-cyan-500" />
+        <span className="hidden sm:inline">{locale === "ar" ? "النظام" : "System"}</span>
+      </button>
+    );
+  }
 
   const nextLabel =
     theme === "system"

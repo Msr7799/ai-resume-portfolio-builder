@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, LogIn, Mail, Sparkles, UserPlus } from "lucide-react";
 import type { ChangeEventHandler, FormEvent } from "react";
 import { useState } from "react";
@@ -17,6 +18,7 @@ type LoadingAction = AuthMode | "reset-request" | "reset-confirm";
 
 type AuthCardProps = {
   initialMode?: AuthMode;
+  initialError?: string;
   initialResetEmail?: string;
   initialResetToken?: string;
 };
@@ -69,6 +71,7 @@ const copy = {
     resetRequested: "إذا كان البريد مسجلًا، تم إنشاء رمز استرجاع صالح لمدة 15 دقيقة.",
     resetReady: "تم تجهيز رابط الاسترجاع لهذا الحساب.",
     resetSuccess: "تم تغيير كلمة المرور. يمكنك تسجيل الدخول الآن.",
+    googleFailed: "تعذر تسجيل الدخول بقوقل. تحقق من إعدادات Google OAuth ثم حاول مرة أخرى.",
     openResetLink: "فتح رابط الاسترجاع",
     showPassword: "إظهار كلمة المرور",
     hidePassword: "إخفاء كلمة المرور",
@@ -114,13 +117,19 @@ const copy = {
     resetRequested: "If that email exists, a reset token was created for 15 minutes.",
     resetReady: "A reset link is ready for this account.",
     resetSuccess: "Password changed. You can sign in now.",
+    googleFailed: "Google sign-in failed. Check the Google OAuth settings and try again.",
     openResetLink: "Open reset link",
     showPassword: "Show password",
     hidePassword: "Hide password",
   },
 } as const;
 
-export function AuthCard({ initialMode = "sign-in", initialResetEmail = "", initialResetToken = "" }: AuthCardProps) {
+export function AuthCard({
+  initialMode = "sign-in",
+  initialError = "",
+  initialResetEmail = "",
+  initialResetToken = "",
+}: AuthCardProps) {
   const { locale, isRtl } = useLanguage();
   const text = copy[locale];
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -138,7 +147,7 @@ export function AuthCard({ initialMode = "sign-in", initialResetEmail = "", init
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError ? copy[locale].googleFailed : "");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState<LoadingAction | null>(null);
 
@@ -153,6 +162,12 @@ export function AuthCard({ initialMode = "sign-in", initialResetEmail = "", init
     setError("");
     setNotice("");
     setMode(nextMode);
+  }
+
+  function signInWithGoogle() {
+    setError("");
+    setNotice("");
+    window.location.href = "/api/auth/google";
   }
 
   async function submitSignIn(event: FormEvent<HTMLFormElement>) {
@@ -343,6 +358,30 @@ export function AuthCard({ initialMode = "sign-in", initialResetEmail = "", init
                 <LogIn className="size-4" />
                 {loading === "sign-in" ? text.signingIn : text.signIn}
               </Button>
+              <button
+                type="button"
+                className="mx-auto inline-flex h-[46px] w-[179px] items-center justify-center rounded-full transition hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                onClick={signInWithGoogle}
+                disabled={loading !== null}
+                aria-label="Sign in with Google"
+              >
+                <Image
+                  src="/google-login-light.svg"
+                  alt="Sign in with Google"
+                  width={179}
+                  height={46}
+                  className="block dark:hidden"
+                  priority
+                />
+                <Image
+                  src="/google-login-dark.svg"
+                  alt="Sign in with Google"
+                  width={179}
+                  height={46}
+                  className="hidden dark:block"
+                  priority
+                />
+              </button>
               <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => flip("reset-password")}>
                 <KeyRound className="size-4" />
                 {text.forgotPassword}

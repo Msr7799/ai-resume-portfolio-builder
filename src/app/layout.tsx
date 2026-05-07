@@ -26,8 +26,8 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="ar"
-      dir="rtl"
+      lang="en"
+      dir="ltr"
       data-scroll-behavior="smooth"
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}

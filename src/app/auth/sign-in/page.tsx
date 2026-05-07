@@ -3,6 +3,7 @@ import { AuthCard } from "@/components/auth/auth-card";
 type SignInPageProps = {
   searchParams?: Promise<{
     email?: string;
+    error?: string;
     resetToken?: string;
   }>;
 };
@@ -16,6 +17,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       initialMode={resetToken ? "reset-password" : "sign-in"}
       initialResetEmail={params?.email ?? ""}
       initialResetToken={resetToken}
+      initialError={params?.error ?? ""}
     />
   );
 }

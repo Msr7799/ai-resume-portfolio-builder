@@ -1,19 +1,21 @@
 import type { Resume } from "@/types";
+import { getHtmlTemplateSeedData } from "@/templates/generated-html-templates";
 import type {
   CanvaTemplateData,
   CanvaTemplateField,
   CanvaTemplateFieldSourceKey,
   CanvaTemplateFieldLayout,
+  CanvaTemplateImageSettings,
   CanvaTemplateFieldState,
   CanvaTemplateFieldStyle,
   CanvaTemplateValue,
 } from "@/types/template";
 
-export const PROFILE_PLACEHOLDER = "/profile-placeholder.png";
+export const PROFILE_PLACEHOLDER = "/placeholder-fram-bg.png";
 
 export function defaultTemplateDataFromResume(resume: Resume): CanvaTemplateData {
   return {
-    profileImage: PROFILE_PLACEHOLDER,
+    profileImage: resume.templateId.startsWith("template-") ? "" : PROFILE_PLACEHOLDER,
     fullName: resume.personalInfo.fullName,
     jobTitle: resume.personalInfo.jobTitle,
     phone: resume.personalInfo.phone,
@@ -35,6 +37,9 @@ export function defaultTemplateDataFromResume(resume: Resume): CanvaTemplateData
       resume.templateData?.expertise ??
       "A balanced skill set across technology and leadership. Technically, I specialize in full-stack development, automation, Git version control, cloud deployment, and database design.",
     skills: resume.skills.map((skill) => skill.name),
+    certificates: resume.certificates.map((item) => `${item.name}${item.issuer ? ` - ${item.issuer}` : ""}${item.date ? ` (${item.date})` : ""}`),
+    awards: resume.templateData?.awards ?? ["Outstanding project delivery", "Strong teamwork and leadership"],
+    references: resume.templateData?.references ?? ["Available upon request"],
     languages: resume.languages.map((item) => `${item.language} - ${item.proficiency}`),
     deployments: resume.projects.map((project) => {
       const url = project.liveUrl || project.githubUrl;
@@ -48,10 +53,22 @@ export function defaultTemplateDataFromResume(resume: Resume): CanvaTemplateData
 }
 
 export function getTemplateData(resume: Resume): CanvaTemplateData {
-  return {
+  const merged = {
     ...defaultTemplateDataFromResume(resume),
+    ...getHtmlTemplateSeedData(resume.templateId),
     ...(resume.templateData ?? {}),
   };
+
+  // HTML-derived templates already contain the original placeholder frame in their clean background.
+  // Keep the image value empty until the user uploads a real photo, otherwise the placeholder is drawn twice.
+  if (
+    resume.templateId.startsWith("template-") &&
+    (!resume.templateData?.profileImage || resume.templateData.profileImage === PROFILE_PLACEHOLDER)
+  ) {
+    merged.profileImage = "";
+  }
+
+  return merged;
 }
 
 export function getTemplateValue(data: CanvaTemplateData, key: CanvaTemplateFieldSourceKey) {
@@ -118,6 +135,7 @@ export function getTemplateFieldState(resume: Resume, field: CanvaTemplateField)
     linkOverride: stored.linkOverride,
     locked: stored.locked ?? false,
     richTextHtml: stored.richTextHtml,
+    image: stored.image ?? {},
   };
 }
 
@@ -140,10 +158,11 @@ export function getEffectiveFieldStyle(resume: Resume, field: CanvaTemplateField
     bullets: stateStyle.bullets ?? isListLikeField(field),
     autoFit: stateStyle.autoFit ?? true,
     lineHeight: stateStyle.lineHeight ?? 1.14,
-    fontFamily: stateStyle.fontFamily ?? "Open Sans",
+    fontFamily: stateStyle.fontFamily ?? field.fontFamily ?? "Open Sans",
     strike: stateStyle.strike ?? false,
     align: stateStyle.align ?? field.align ?? "left",
     textTransform: stateStyle.textTransform ?? "none",
+    textDirection: stateStyle.textDirection ?? "ltr",
   };
 }
 
@@ -155,6 +174,16 @@ export function getEffectiveFieldLayout(resume: Resume, field: CanvaTemplateFiel
     width: layout.width ?? field.width,
     height: layout.height ?? field.height,
     zIndex: layout.zIndex ?? field.zIndex ?? 1,
+  };
+}
+
+export function getEffectiveFieldImageSettings(resume: Resume, field: CanvaTemplateField): Required<CanvaTemplateImageSettings> {
+  const image = getTemplateFieldState(resume, field).image ?? {};
+  return {
+    borderRadius: image.borderRadius ?? field.borderRadius ?? 0,
+    objectPositionX: image.objectPositionX ?? 50,
+    objectPositionY: image.objectPositionY ?? 50,
+    scale: image.scale ?? 1,
   };
 }
 
@@ -181,6 +210,10 @@ export function setTemplateFieldState(
         layout: {
           ...(currentState.layout ?? {}),
           ...(patch.layout ?? {}),
+        },
+        image: {
+          ...(currentState.image ?? {}),
+          ...(patch.image ?? {}),
         },
       },
     },

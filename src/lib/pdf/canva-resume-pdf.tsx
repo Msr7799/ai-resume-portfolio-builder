@@ -12,6 +12,7 @@ import {
 import {
   getEffectiveFieldLabel,
   getEffectiveFieldHtml,
+  getEffectiveFieldImageSettings,
   getEffectiveFieldLayout,
   getEffectiveFieldLink,
   getEffectiveFieldStyle,
@@ -24,6 +25,7 @@ import {
   PROFILE_PLACEHOLDER,
   stringifyTemplateValue,
 } from "@/lib/template-data";
+import { getTemplateImageBorderRadiusPdf, shouldRenderTemplateImageOverlay } from "@/lib/template-image";
 import type { Resume } from "@/types";
 import type {
   CanvaResumeTemplate,
@@ -54,7 +56,17 @@ const styles = StyleSheet.create({
 
 function imageSource(path: string) {
   if (path.startsWith("data:") || path.startsWith("http")) return path;
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!baseUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "NEXT_PUBLIC_APP_URL environment variable is required in production for PDF asset loading. " +
+        "Set it to your deployed app URL (e.g. https://resume.example.com)."
+      );
+    }
+    // Development fallback only
+    return `http://localhost:3000${path}`;
+  }
   return `${baseUrl.replace(/\/$/, "")}${path}`;
 }
 
@@ -146,6 +158,8 @@ function absoluteFieldStyle(resume: Resume, field: CanvaTemplateField, value: Ca
     fontFamily: styleState.fontFamily === "Times New Roman" ? "Times-Roman" : "Helvetica",
     lineHeight: styleState.lineHeight,
     textTransform: styleState.textTransform,
+    direction: styleState.textDirection,
+    backgroundColor: field.backgroundColor ?? "transparent",
     overflow: "hidden" as const,
     zIndex: layout.zIndex,
   };
@@ -225,8 +239,19 @@ export function CanvaResumePdf({
           const style = absoluteFieldStyle(resume, field, value);
 
           if (field.type === "image") {
-            const src = stringifyTemplateValue(value) || field.placeholderImage || PROFILE_PLACEHOLDER;
-            return <Image key={field.id} src={imageSource(src)} style={style} />;
+            const rawImageValue = stringifyTemplateValue(value);
+            if (!shouldRenderTemplateImageOverlay(field, rawImageValue || undefined)) {
+              return null;
+            }
+            const src = rawImageValue || field.placeholderImage || PROFILE_PLACEHOLDER;
+            const image = getEffectiveFieldImageSettings(resume, field);
+            const imageStyle = {
+              ...style,
+              borderRadius: getTemplateImageBorderRadiusPdf(field, image),
+              objectFit: "cover" as const,
+              objectPosition: `${image.objectPositionX}% ${image.objectPositionY}%`,
+            };
+            return <Image key={field.id} src={imageSource(src)} style={imageStyle} />;
           }
 
           if (field.type === "qr") {

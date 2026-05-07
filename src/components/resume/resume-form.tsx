@@ -400,7 +400,7 @@ export function ResumeForm({
             <Field label={isArabic ? "قالب السيرة" : "Resume template"}>
               <Select
                 value={draft.templateId}
-                onChange={(event) => setDraft({ ...draft, templateId: event.target.value })}
+                onChange={(event) => setDraft({ ...draft, templateId: event.target.value, templateData: {}, templateFieldStates: {} })}
               >
                 {resumeTemplates.map((template) => (
                   <option key={template.id} value={template.id}>

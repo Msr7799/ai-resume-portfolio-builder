@@ -194,7 +194,19 @@ export default function Home() {
                   selected={false}
                   actionLabel={t("useTemplate")}
                   onSelect={() => {
-                    window.location.href = "/dashboard/templates";
+                    // Save template selection and go straight to the editor
+                    const stored = localStorage.getItem("airpb:resume");
+                    try {
+                      const resume = stored ? JSON.parse(stored) : {};
+                      resume.templateId = template.id;
+                      resume.templateData = {};
+                      resume.templateFieldStates = {};
+                      resume.status = "Draft";
+                      localStorage.setItem("airpb:resume", JSON.stringify(resume));
+                    } catch {
+                      // ignore parse errors
+                    }
+                    window.location.href = "/dashboard/resume";
                   }}
                 />
               </div>

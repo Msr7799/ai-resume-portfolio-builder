@@ -14,6 +14,7 @@ import {
   Bold,
   CaseSensitive,
   Group,
+  ImagePlus,
   Italic,
   Link as LinkIcon,
   List,
@@ -25,17 +26,21 @@ import {
   Trash2,
   Underline,
   Ungroup,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import type {
   CSSProperties,
   FocusEvent as ReactFocusEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
+  RefObject,
 } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/components/layout/language-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { usePromptModal } from "@/components/ui/prompt-modal";
 import { createQrDataUrl } from "@/lib/qr";
 import {
   exceedsLines,
@@ -43,6 +48,7 @@ import {
   getEffectiveFieldLayout,
   getEffectiveFieldLink,
   getEffectiveFieldStyle,
+  getEffectiveFieldImageSettings,
   getEffectiveFieldHtml,
   getTemplateData,
   getTemplateFieldState,
@@ -55,6 +61,7 @@ import {
   sanitizeRichHtml,
   stringifyTemplateValue,
 } from "@/lib/template-data";
+import { getTemplateImageBorderRadiusCss, getTemplateImageObjectStyle, isTemplatePlaceholderImage, shouldRenderTemplateImageOverlay } from "@/lib/template-image";
 import type { Resume } from "@/types";
 import type {
   CanvaResumeTemplate,
@@ -69,6 +76,7 @@ const A4_PDF_WIDTH = 595.28;
 const A4_RATIO = 297 / 210;
 
 type RequiredLayout = Required<CanvaTemplateFieldLayout>;
+type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type ContextMenuState = {
   x: number;
@@ -88,6 +96,17 @@ type SavedTextSelection = {
   start: number;
   end: number;
 };
+
+type ImagePanInteraction = {
+  field: CanvaTemplateField;
+  startX: number;
+  startY: number;
+  startPositionX: number;
+  startPositionY: number;
+};
+
+const MIN_FIELD_WIDTH = 2;
+const MIN_FIELD_HEIGHT = 1;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -231,6 +250,46 @@ function eventToPercent(event: MouseEvent | ReactMouseEvent, rect: DOMRect) {
   return {
     x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100),
     y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100),
+  };
+}
+
+function resizeLayoutFromHandle(
+  start: RequiredLayout,
+  handle: ResizeHandle,
+  deltaX: number,
+  deltaY: number,
+) {
+  const right = start.x + start.width;
+  const bottom = start.y + start.height;
+  let x = start.x;
+  let y = start.y;
+  let width = start.width;
+  let height = start.height;
+
+  if (handle.includes("e")) {
+    width = clamp(start.width + deltaX, MIN_FIELD_WIDTH, 100 - start.x);
+  }
+
+  if (handle.includes("w")) {
+    x = clamp(start.x + deltaX, 0, right - MIN_FIELD_WIDTH);
+    width = clamp(right - x, MIN_FIELD_WIDTH, 100 - x);
+  }
+
+  if (handle.includes("s")) {
+    height = clamp(start.height + deltaY, MIN_FIELD_HEIGHT, 100 - start.y);
+  }
+
+  if (handle.includes("n")) {
+    y = clamp(start.y + deltaY, 0, bottom - MIN_FIELD_HEIGHT);
+    height = clamp(bottom - y, MIN_FIELD_HEIGHT, 100 - y);
+  }
+
+  return {
+    ...start,
+    x: roundLayout(x),
+    y: roundLayout(y),
+    width: roundLayout(width),
+    height: roundLayout(height),
   };
 }
 
@@ -477,9 +536,19 @@ export function TemplateLivePreview({
   onFieldStateChange,
   onFieldValueClear,
   onFieldValueChange,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  exportRef,
 }: {
   template: CanvaResumeTemplate;
   resume: Resume;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  exportRef?: RefObject<HTMLDivElement | null>;
   onFieldLayoutChange?: (
     field: CanvaTemplateField,
     layout: RequiredLayout,
@@ -496,12 +565,13 @@ export function TemplateLivePreview({
 }) {
   const { locale } = useLanguage();
   const isArabic = locale === "ar";
+  const { prompt: showPrompt, PromptDialog } = usePromptModal();
   const data = useMemo(() => getTemplateData(resume), [resume]);
   const qrSource =
     stringifyTemplateValue(data.qr) ||
     stringifyTemplateValue(data.portfolioUrl);
   const [qrDataUrl, setQrDataUrl] = useState("");
-  const [zoom, setZoom] = useState(0.82);
+  const [zoom, setZoom] = useState(0.58);
   const [selectedFieldIds, setSelectedFieldIds] = useState<string[]>([]);
   const [selectionBox, setSelectionBox] = useState<SelectionBox>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -509,20 +579,26 @@ export function TemplateLivePreview({
     null,
   );
   const [textEditFieldId, setTextEditFieldId] = useState<string | null>(null);
+  const [imageEditFieldId, setImageEditFieldId] = useState<string | null>(null);
+  const [imagePanInteraction, setImagePanInteraction] = useState<ImagePanInteraction | null>(null);
   const [toolbarFontSize, setToolbarFontSize] = useState(12);
   const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const imageUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const imageUploadFieldRef = useRef<CanvaTemplateField | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const savedSelectionRef = useRef<SavedTextSelection | null>(null);
   const [interaction, setInteraction] = useState<{
     field: CanvaTemplateField;
     mode: "move" | "resize";
+    resizeHandle: ResizeHandle;
     startX: number;
     startY: number;
     startLayouts: Record<string, RequiredLayout>;
     selectedIds: string[];
   } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const groupCounterRef = useRef(0);
   const previewWidth = Math.round(A4_PREVIEW_BASE_WIDTH * zoom);
   const fontScale = previewWidth / A4_PDF_WIDTH;
   const editable = Boolean(onFieldLayoutChange);
@@ -556,13 +632,9 @@ export function TemplateLivePreview({
     [template.fields, resume],
   );
 
-  const fieldsById = useMemo(
-    () =>
-      Object.fromEntries(
-        template.fields.map((field) => [field.id, field]),
-      ) as Record<string, CanvaTemplateField>,
-    [template.fields],
-  );
+  const fieldsById = Object.fromEntries(
+    template.fields.map((field) => [field.id, field]),
+  ) as Record<string, CanvaTemplateField>;
 
   function getFieldGroupIds(field: CanvaTemplateField) {
     const groupId = getTemplateFieldState(resume, field).groupId;
@@ -582,6 +654,7 @@ export function TemplateLivePreview({
     // until the user double-clicks a text box, similar to Canva/Figma behavior.
     if (textEditFieldId !== field.id) {
       setTextEditFieldId(null);
+      if (field.type !== "image") setImageEditFieldId(null);
       setActiveRichFieldId(null);
       savedRangeRef.current = null;
       savedSelectionRef.current = null;
@@ -608,6 +681,7 @@ export function TemplateLivePreview({
     event?.preventDefault();
     event?.stopPropagation();
     setContextMenu(null);
+    setImageEditFieldId(null);
     setSelectedFieldIds(getFieldGroupIds(field));
     setTextEditFieldId(field.id);
     setActiveRichFieldId(field.id);
@@ -623,6 +697,17 @@ export function TemplateLivePreview({
     setActiveRichFieldId(null);
     savedRangeRef.current = null;
     savedSelectionRef.current = null;
+  }
+
+  function enterImageEditMode(field: CanvaTemplateField, event: ReactMouseEvent) {
+    if (!editable || field.type !== "image") return;
+    event.preventDefault();
+    event.stopPropagation();
+    leaveTextEditMode();
+    clearBrowserSelection();
+    setContextMenu(null);
+    setSelectedFieldIds(getFieldGroupIds(field));
+    setImageEditFieldId(field.id);
   }
 
   function selectAllEditorText(fieldId: string) {
@@ -668,7 +753,8 @@ export function TemplateLivePreview({
 
   function groupSelection() {
     if (!onFieldStateChange || selectedFieldIds.length < 2) return;
-    const groupId = `group-${Date.now()}`;
+    groupCounterRef.current += 1;
+    const groupId = `group-${groupCounterRef.current}`;
     selectedFieldIds.forEach((id) => {
       const field = fieldsById[id];
       if (field) onFieldStateChange(field, { groupId });
@@ -683,16 +769,17 @@ export function TemplateLivePreview({
     });
   }
 
-  function editSelectedFieldLink() {
+  async function editSelectedFieldLink() {
     if (!onFieldStateChange || selectedFieldIds.length !== 1) return;
     const field = fieldsById[selectedFieldIds[0]];
     if (!field) return;
     const current = getTemplateFieldState(resume, field).linkOverride ?? "";
-    const next = window.prompt(
+    const next = await showPrompt(
       isArabic
         ? "أدخل الرابط الذي تريد ربط هذا القسم به في PDF"
         : "Enter the hyperlink for this section in the PDF",
       current,
+      "https://example.com",
     );
     if (next === null) return;
     onFieldStateChange(field, { linkOverride: next.trim() || undefined });
@@ -707,6 +794,28 @@ export function TemplateLivePreview({
         onFieldStateChange?.(field, { richTextHtml: undefined });
       }
     });
+  }
+
+  function requestImageUpload(field: CanvaTemplateField) {
+    if (!onFieldValueChange || field.type !== "image") return;
+    imageUploadFieldRef.current = field;
+    imageUploadInputRef.current?.click();
+    setContextMenu(null);
+  }
+
+  function handleImageUpload(file: File | undefined) {
+    const field = imageUploadFieldRef.current;
+    if (!file || !field || !onFieldValueChange) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      onFieldValueChange(field, String(reader.result ?? ""));
+      onFieldStateChange?.(field, {
+        image: { objectPositionX: 50, objectPositionY: 50, scale: 1 },
+      });
+      setSelectedFieldIds(getFieldGroupIds(field));
+      setImageEditFieldId(field.id);
+    };
+    reader.readAsDataURL(file);
   }
 
   function activeEditor() {
@@ -863,12 +972,13 @@ export function TemplateLivePreview({
     persistEditorHtml(field);
   }
 
-  function editSelectedTextLink() {
+  async function editSelectedTextLink() {
     const payload = selectionPayload();
     if (!payload) return;
-    const href = window.prompt(
+    const href = await showPrompt(
       isArabic ? "أدخل الرابط للنص المحدد" : "Enter link for selected text",
       "https://",
+      "https://example.com",
     );
     if (!href) return;
 
@@ -953,11 +1063,12 @@ export function TemplateLivePreview({
 
       const start = activeInteraction.startLayouts[activeInteraction.field.id];
       if (!start) return;
-      const nextLayout = {
-        ...start,
-        width: roundLayout(clamp(start.width + deltaX, 3, 100 - start.x)),
-        height: roundLayout(clamp(start.height + deltaY, 2, 100 - start.y)),
-      };
+      const nextLayout = resizeLayoutFromHandle(
+        start,
+        activeInteraction.resizeHandle,
+        deltaX,
+        deltaY,
+      );
       applyLayoutChange(activeInteraction.field, nextLayout);
     }
 
@@ -991,6 +1102,8 @@ export function TemplateLivePreview({
       if (event.key === "Escape") {
         setSelectedFieldIds([]);
         leaveTextEditMode();
+        setImageEditFieldId(null);
+        setImagePanInteraction(null);
         setContextMenu(null);
       }
     }
@@ -1038,11 +1151,13 @@ export function TemplateLivePreview({
     mode: "move" | "resize",
     field: CanvaTemplateField,
     event: ReactMouseEvent,
+    resizeHandle: ResizeHandle = "se",
   ) {
     if (!editable) return;
     event.preventDefault();
     event.stopPropagation();
     setContextMenu(null);
+    setImageEditFieldId(null);
     if (textEditFieldId !== field.id) clearBrowserSelection();
 
     if (!selectedFieldIds.includes(field.id)) {
@@ -1067,6 +1182,7 @@ export function TemplateLivePreview({
     setInteraction({
       field,
       mode,
+      resizeHandle,
       startX: event.clientX,
       startY: event.clientY,
       startLayouts,
@@ -1074,9 +1190,26 @@ export function TemplateLivePreview({
     });
   }
 
+  function startImagePan(field: CanvaTemplateField, event: ReactMouseEvent) {
+    if (!editable || !onFieldStateChange || field.type !== "image") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const image = getEffectiveFieldImageSettings(resume, field);
+    setSelectedFieldIds(getFieldGroupIds(field));
+    setImageEditFieldId(field.id);
+    setImagePanInteraction({
+      field,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPositionX: image.objectPositionX,
+      startPositionY: image.objectPositionY,
+    });
+  }
+
   function onPreviewMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
     if (!editable || event.button !== 0 || !previewRef.current) return;
-    if (event.shiftKey) {
+    const startsFromPage = event.target === previewRef.current;
+    if (event.shiftKey || startsFromPage) {
       event.preventDefault();
       const rect = previewRef.current.getBoundingClientRect();
       const point = eventToPercent(event, rect);
@@ -1087,14 +1220,46 @@ export function TemplateLivePreview({
         endY: point.y,
       });
       setSelectedFieldIds([]);
+      leaveTextEditMode();
+      setImageEditFieldId(null);
+      setContextMenu(null);
       return;
     }
-    if (event.target === previewRef.current) {
-      setSelectedFieldIds([]);
-      leaveTextEditMode();
-      setContextMenu(null);
-    }
   }
+
+  useEffect(() => {
+    if (!imagePanInteraction || !previewRef.current || !onFieldStateChange) return;
+    const activePan = imagePanInteraction;
+    const applyStateChange = onFieldStateChange;
+
+    function onMove(event: MouseEvent) {
+      const rect = previewRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const layout = getEffectiveFieldLayout(resume, activePan.field);
+      const frameWidth = Math.max(1, (layout.width / 100) * rect.width);
+      const frameHeight = Math.max(1, (layout.height / 100) * rect.height);
+      const deltaX = ((event.clientX - activePan.startX) / frameWidth) * 100;
+      const deltaY = ((event.clientY - activePan.startY) / frameHeight) * 100;
+
+      applyStateChange(activePan.field, {
+        image: {
+          objectPositionX: roundLayout(clamp(activePan.startPositionX - deltaX, 0, 100)),
+          objectPositionY: roundLayout(clamp(activePan.startPositionY - deltaY, 0, 100)),
+        },
+      });
+    }
+
+    function onUp() {
+      setImagePanInteraction(null);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [imagePanInteraction, onFieldStateChange, resume]);
 
   useEffect(() => {
     if (!selectionBox || !previewRef.current) return;
@@ -1147,9 +1312,22 @@ export function TemplateLivePreview({
     const field = fieldsById[id];
     return Boolean(field && getTemplateFieldState(resume, field).groupId);
   });
+  const contextField = contextMenu ? fieldsById[contextMenu.fieldId] : undefined;
 
   return (
+    <>
+    <PromptDialog />
     <div className="space-y-3">
+      <input
+        ref={imageUploadInputRef}
+        className="sr-only"
+        type="file"
+        accept="image/*"
+        onChange={(event) => {
+          handleImageUpload(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white/90 p-2 shadow-sm dark:border-white/10 dark:bg-zinc-950/80">
         {warnings.length ? (
           <div className="min-w-0 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
@@ -1176,8 +1354,8 @@ export function TemplateLivePreview({
             <span className="hidden items-center gap-1 rounded-full bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-700 dark:text-cyan-200 sm:inline-flex">
               <Move className="size-3" />
               {isArabic
-                ? "Click: تحديد · Ctrl: متعدد · Shift+Drag: مربع تحديد"
-                : "Click: select · Ctrl: multi-select · Shift+drag: marquee"}
+                ? "Click: تحديد · Ctrl: متعدد · اسحب مساحة فارغة: مربع تحديد"
+                : "Click: select · Ctrl: multi-select · drag blank space: marquee"}
             </span>
           ) : null}
           <Button
@@ -1205,15 +1383,13 @@ export function TemplateLivePreview({
           >
             <Plus className="size-3.5" />
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setZoom(0.82)}>
+          <Button size="sm" variant="ghost" onClick={() => setZoom(0.58)}>
             <RotateCcw className="size-3.5" />
           </Button>
         </div>
       </div>
 
-      {editable &&
-      selectedRichField &&
-      isTextEditableField(selectedRichField) ? (
+      {editable ? (
         <div
           ref={toolbarRef}
           className="sticky top-0 z-[1200] flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-950/95"
@@ -1226,6 +1402,24 @@ export function TemplateLivePreview({
             if (!target.closest("input, select")) event.preventDefault();
           }}
         >
+          <div className="flex h-9 items-center overflow-hidden rounded-lg border border-slate-200 dark:border-white/10">
+            <ToolbarButton
+              title={isArabic ? "تراجع Ctrl+Z" : "Undo Ctrl+Z"}
+              onClick={() => onUndo?.()}
+              disabled={!canUndo || !onUndo}
+              compact
+            >
+              <Undo2 className="size-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              title={isArabic ? "إعادة Ctrl+Y" : "Redo Ctrl+Y"}
+              onClick={() => onRedo?.()}
+              disabled={!canRedo || !onRedo}
+              compact
+            >
+              <Redo2 className="size-4" />
+            </ToolbarButton>
+          </div>
           <select
             className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 dark:border-white/10 dark:bg-zinc-900 dark:text-white"
             value={selectedRichStyle?.fontFamily ?? "Open Sans"}
@@ -1372,18 +1566,16 @@ export function TemplateLivePreview({
           >
             <LinkIcon className="size-4" />
           </ToolbarButton>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isArabic
-              ? "اختر مربعًا ثم استخدم هذا الشريط لتعديل نفس الحقل في اللوحة الجانبية"
-              : "Select a box, then use this toolbar to style the same field shown in the side editor"}
-          </span>
         </div>
       ) : null}
 
-      <div className="max-h-[calc(100vh-12rem)] overflow-auto rounded-xl border border-slate-200 bg-stone-100 p-5 shadow-inner dark:border-white/10 dark:bg-zinc-950">
+      <div className="max-h-[calc(100vh-9rem)] overflow-auto rounded-xl border border-slate-200 bg-stone-100 p-4 shadow-inner dark:border-white/10 dark:bg-zinc-950">
         <div className="mx-auto" style={{ width: `${previewWidth}px` }}>
           <div
-            ref={previewRef}
+            ref={(node) => {
+              previewRef.current = node;
+              if (exportRef) exportRef.current = node;
+            }}
             className="relative aspect-[210/297] w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-white/10"
             onMouseDown={onPreviewMouseDown}
           >
@@ -1431,13 +1623,16 @@ export function TemplateLivePreview({
                   "none",
                 lineHeight: styleState.lineHeight,
                 textTransform: styleState.textTransform,
+                direction: styleState.textDirection,
+                unicodeBidi: "plaintext",
+                backgroundColor: field.backgroundColor ?? "transparent",
                 zIndex: layout.zIndex,
               } as const;
 
               const selectionClass = editable
                 ? isSelected
-                  ? "ring-2 ring-cyan-500"
-                  : "ring-0 hover:ring-1 hover:ring-cyan-400/70"
+                  ? ""
+                  : "hover:outline hover:outline-1 hover:outline-cyan-400/70"
                 : "";
 
               const sharedEvents = {
@@ -1465,41 +1660,102 @@ export function TemplateLivePreview({
                 },
               };
 
-              const selectionDots =
-                editable && isSelected && !isTextEditing ? (
-                  <>
-                    <span className="pointer-events-none absolute -left-1 -top-1 size-2 rounded-full border border-white bg-cyan-600 shadow" />
-                    <span className="pointer-events-none absolute -right-1 -top-1 size-2 rounded-full border border-white bg-cyan-600 shadow" />
-                    <span className="pointer-events-none absolute -bottom-1 -left-1 size-2 rounded-full border border-white bg-cyan-600 shadow" />
-                    <button
-                      type="button"
-                      className="absolute -bottom-1.5 -right-1.5 size-3 cursor-nwse-resize rounded-full border border-white bg-cyan-600 shadow"
-                      onMouseDown={(event) =>
-                        startInteraction("resize", field, event)
-                      }
-                      aria-label="Resize field"
-                    />
-                  </>
+              const resizeHandleButton = (
+                handle: ResizeHandle,
+                className: string,
+              ) => (
+                <button
+                  type="button"
+                  className={`pointer-events-auto absolute border border-violet-500 bg-white shadow-sm ${className}`}
+                  onMouseDown={(event) =>
+                    startInteraction("resize", field, event, handle)
+                  }
+                  aria-label={`Resize ${handle}`}
+                />
+              );
+
+              const selectionFrame =
+                editable && isSelected ? (
+                  <div
+                    data-export-ignore="true"
+                    className="pointer-events-none absolute -inset-px z-[30] rounded-[2px] border border-violet-500"
+                  >
+                    {resizeHandleButton(
+                      "nw",
+                      "-left-[5px] -top-[5px] size-2.5 cursor-nwse-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "n",
+                      "left-1/2 -top-[4px] h-2 w-4 -translate-x-1/2 cursor-ns-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "ne",
+                      "-right-[5px] -top-[5px] size-2.5 cursor-nesw-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "e",
+                      "-right-[4px] top-1/2 h-4 w-2 -translate-y-1/2 cursor-ew-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "se",
+                      "-bottom-[5px] -right-[5px] size-2.5 cursor-nwse-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "s",
+                      "bottom-[-4px] left-1/2 h-2 w-4 -translate-x-1/2 cursor-ns-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "sw",
+                      "-bottom-[5px] -left-[5px] size-2.5 cursor-nesw-resize rounded-full",
+                    )}
+                    {resizeHandleButton(
+                      "w",
+                      "-left-[4px] top-1/2 h-4 w-2 -translate-y-1/2 cursor-ew-resize rounded-full",
+                    )}
+                  </div>
                 ) : null;
 
               if (field.type === "image") {
-                const src =
-                  stringifyTemplateValue(value) ||
-                  field.placeholderImage ||
-                  PROFILE_PLACEHOLDER;
+                const rawImageValue = stringifyTemplateValue(value);
+                const src = rawImageValue || field.placeholderImage || PROFILE_PLACEHOLDER;
+                const isPlaceholder = isTemplatePlaceholderImage(field, src);
+                const shouldDrawImage = shouldRenderTemplateImageOverlay(field, rawImageValue || undefined);
+                const imageSettings = getEffectiveFieldImageSettings(resume, field);
+                const isImageEditing = imageEditFieldId === field.id;
+
                 return (
                   <div
                     key={field.id}
-                    className={`absolute select-none ${editable ? "cursor-move" : ""} ${selectionClass}`}
+                    className={`absolute overflow-visible select-none ${editable ? (isImageEditing ? "cursor-grab active:cursor-grabbing" : "cursor-move") : ""} ${selectionClass}`}
                     style={boxStyle}
-                    {...sharedEvents}
+                    onMouseDown={(event) => {
+                      if (isImageEditing) {
+                        startImagePan(field, event);
+                        return;
+                      }
+                      startInteraction("move", field, event);
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      selectField(field, event);
+                    }}
+                    onDoubleClick={(event) => enterImageEditMode(field, event)}
+                    onContextMenu={sharedEvents.onContextMenu}
                   >
-                    <img
-                      src={src}
-                      alt={field.label}
-                      className="size-full rounded-full object-cover"
-                    />
-                    {selectionDots}
+                    <div
+                      className="absolute inset-0 overflow-hidden"
+                      style={{ borderRadius: getTemplateImageBorderRadiusCss(field, imageSettings) }}
+                    >
+                      {shouldDrawImage ? (
+                        <img
+                          src={src}
+                          alt={field.label}
+                          className={`absolute max-w-none ${isPlaceholder ? "object-contain" : "object-cover"}`}
+                          style={getTemplateImageObjectStyle(imageSettings)}
+                        />
+                      ) : null}
+                    </div>
+                    {selectionFrame}
                   </div>
                 );
               }
@@ -1508,7 +1764,7 @@ export function TemplateLivePreview({
                 return qrDataUrl ? (
                   <div
                     key={field.id}
-                    className={`absolute select-none ${editable ? "cursor-move" : ""} ${selectionClass}`}
+                    className={`absolute overflow-visible select-none ${editable ? "cursor-move" : ""} ${selectionClass}`}
                     style={boxStyle}
                     {...sharedEvents}
                   >
@@ -1528,7 +1784,7 @@ export function TemplateLivePreview({
                         className="size-full object-contain"
                       />
                     </a>
-                    {selectionDots}
+                    {selectionFrame}
                   </div>
                 ) : null;
               }
@@ -1621,7 +1877,7 @@ export function TemplateLivePreview({
               return (
                 <div
                   key={field.id}
-                  className={`absolute overflow-hidden ${isTextEditing ? "cursor-text select-text" : "select-none"} ${editable && !isTextEditing ? "cursor-move" : "cursor-text"} ${selectionClass}`}
+                  className={`absolute overflow-visible ${isTextEditing ? "cursor-text select-text" : "select-none"} ${editable && !isTextEditing ? "cursor-move" : "cursor-text"} ${selectionClass}`}
                   style={{
                     ...boxStyle,
                     fontFamily: styleState.fontFamily,
@@ -1648,13 +1904,14 @@ export function TemplateLivePreview({
                   ) : (
                     body
                   )}
-                  {selectionDots}
+                  {selectionFrame}
                 </div>
               );
             })}
 
             {selectionBox ? (
               <div
+                data-export-ignore="true"
                 className="absolute z-[999] border border-cyan-500 bg-cyan-400/10"
                 style={{
                   left: `${selectionBoxToRect(selectionBox).x}%`,
@@ -1679,6 +1936,15 @@ export function TemplateLivePreview({
             label={isArabic ? "مسح المحتوى" : "Clear content"}
             onClick={clearSelectedContent}
           />
+          {contextField?.type === "image" ? (
+            <MenuItem
+              icon={<ImagePlus className="size-4" />}
+              label={isArabic ? "رفع صورة" : "Upload picture"}
+              onClick={() => {
+                requestImageUpload(contextField);
+              }}
+            />
+          ) : null}
           {canGroup ? (
             <MenuItem
               icon={<Group className="size-4" />}
@@ -1727,17 +1993,22 @@ export function TemplateLivePreview({
         </div>
       ) : null}
     </div>
+    </>
   );
 }
 
 function ToolbarButton({
   title,
   active = false,
+  disabled = false,
+  compact = false,
   onClick,
   children,
 }: {
   title: string;
   active?: boolean;
+  disabled?: boolean;
+  compact?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -1745,8 +2016,9 @@ function ToolbarButton({
     <button
       type="button"
       title={title}
-      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-sm font-bold transition ${
-        active
+      disabled={disabled}
+      className={`inline-flex h-9 min-w-9 items-center justify-center ${compact ? "rounded-none border-0 px-2" : "rounded-lg border px-2"} text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active && !disabled
           ? "border-blue-600 bg-blue-600 text-white shadow-sm"
           : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100 dark:border-white/10 dark:bg-zinc-900 dark:text-white dark:hover:bg-white/10"
       }`}

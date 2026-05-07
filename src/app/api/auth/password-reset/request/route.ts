@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/server/http";
 import { usersCollection } from "@/lib/server/mongodb";
+import { authLimiter, getClientIp } from "@/lib/server/rate-limit";
 
 type PasswordResetRequestBody = {
   email?: string;
@@ -14,6 +15,11 @@ function hashToken(token: string) {
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  if (!authLimiter.check(ip)) {
+    return apiError("Too many requests. Please try again later.", 429);
+  }
+
   const body = (await request.json()) as PasswordResetRequestBody;
   const email = body.email?.trim().toLowerCase() ?? "";
 
@@ -41,5 +47,14 @@ export async function POST(request: Request) {
   );
 
   const resetUrl = `/auth/sign-in?resetToken=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
+  // TODO: In production, send resetUrl via email (e.g. Resend, SendGrid, SES).
+  // For now, return token in dev only so the frontend can navigate directly.
+  if (process.env.NODE_ENV === "production") {
+    // In production, never leak the token in the response.
+    // The user must check their email.
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ ok: true, resetToken: token, resetUrl, expiresAt: expiresAt.toISOString() });
 }

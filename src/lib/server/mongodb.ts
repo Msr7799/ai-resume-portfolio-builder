@@ -14,6 +14,7 @@ export type UserDocument = {
   username: string;
   email: string;
   passwordHash: string;
+  googleId?: string;
   passwordResetTokenHash?: string;
   passwordResetTokenExpiresAt?: Date;
   role: UserRole;

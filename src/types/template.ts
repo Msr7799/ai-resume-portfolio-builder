@@ -47,6 +47,7 @@ export type CanvaTemplateField = {
   height: number;
   fontSize: number;
   fontWeight?: "normal" | "medium" | "semibold" | "bold";
+  fontFamily?: string;
   color: string;
   align?: "left" | "center" | "right" | "justify";
   maxChars?: number;
@@ -60,6 +61,9 @@ export type CanvaTemplateField = {
   showLabel?: boolean;
   defaultEnabled?: boolean;
   placeholderImage?: string;
+  // True when the placeholder/profile frame is already baked into the clean HTML background.
+  // In that case the editor uses the field only as an upload/selection target and does not draw the placeholder twice.
+  placeholderEmbedded?: boolean;
   backgroundColor?: string;
   borderColor?: string;
   borderRadius?: number;
@@ -75,6 +79,11 @@ export type CanvaResumeTemplate = {
   pageSize: CanvaTemplatePageSize;
   coordinateSystem: CanvaTemplateCoordinateSystem;
   fields: CanvaTemplateField[];
+  /** True when this template has baked text in the background or too few editable fields.
+   *  The UI should display a warning and may disable certain features. */
+  needsCleanup?: boolean;
+  /** Human-readable warning about known limitations of this template. */
+  qualityWarning?: string;
 };
 
 export type CanvaTemplateValue = string | string[];
@@ -94,6 +103,14 @@ export type CanvaTemplateFieldStyle = {
   strike?: boolean;
   align?: "left" | "center" | "right" | "justify";
   textTransform?: "none" | "uppercase" | "lowercase";
+  textDirection?: "ltr" | "rtl";
+};
+
+export type CanvaTemplateImageSettings = {
+  borderRadius?: number;
+  objectPositionX?: number;
+  objectPositionY?: number;
+  scale?: number;
 };
 
 export type CanvaTemplateFieldLayout = {
@@ -113,6 +130,7 @@ export type CanvaTemplateFieldState = {
   linkOverride?: string;
   locked?: boolean;
   richTextHtml?: string;
+  image?: CanvaTemplateImageSettings;
 };
 
 export type CanvaTemplateFieldStates = Record<string, CanvaTemplateFieldState>;

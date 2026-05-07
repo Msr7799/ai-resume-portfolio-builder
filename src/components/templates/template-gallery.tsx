@@ -18,10 +18,27 @@ export function TemplateGallery({
 }) {
   const router = useRouter();
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const { isRtl } = useLanguage();
+  const { isRtl, locale } = useLanguage();
+  const isArabic = locale === "ar";
 
   function selectTemplate(templateId: string) {
-    onSelect({ ...resume, templateId });
+    // Warn the user if changing templates will discard existing fieldStates/templateData
+    const hasExistingData =
+      resume.templateId &&
+      resume.templateId !== templateId &&
+      (Object.keys(resume.templateData ?? {}).length > 0 ||
+        Object.keys(resume.templateFieldStates ?? {}).length > 0);
+
+    if (hasExistingData) {
+      const confirmed = window.confirm(
+        isArabic
+          ? "تغيير القالب سيمسح بيانات التنسيق الحالية (مواقع الحقول، الألوان، التعديلات). هل تريد المتابعة؟"
+          : "Changing templates will discard your current field positions, styles, and layout customizations. Continue?"
+      );
+      if (!confirmed) return;
+    }
+
+    onSelect({ ...resume, templateId, templateData: {}, templateFieldStates: {}, status: "Draft" });
     router.push("/dashboard/resume");
   }
 
@@ -47,12 +64,13 @@ export function TemplateGallery({
         dir="ltr"
         className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-width:thin] sm:gap-5"
       >
-        {canvaResumeTemplates.map((template) => (
+        {canvaResumeTemplates.map((template, index) => (
           <div key={template.id} className="w-[82vw] max-w-[340px] shrink-0 snap-start sm:w-[340px]" dir={isRtl ? "rtl" : "ltr"}>
             <CanvaTemplateCard
               template={template}
               selected={resume.templateId === template.id}
               onSelect={() => selectTemplate(template.id)}
+              priority={index === 0}
             />
           </div>
         ))}

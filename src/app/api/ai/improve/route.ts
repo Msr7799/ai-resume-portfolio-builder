@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { mockAIImprove } from "@/lib/ai";
 import { buildResumeAIPrompt, cleanAIText } from "@/lib/ai/resume-ai";
 import { completeWithOmniRouter } from "@/lib/ai/omni-router";
+import { aiLimiter, getClientIp } from "@/lib/server/rate-limit";
 import type { AIImproveIntent, AIImproveRequest, Locale } from "@/types";
 
 const intents: AIImproveIntent[] = [
@@ -15,6 +15,14 @@ const intents: AIImproveIntent[] = [
 ];
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  if (!aiLimiter.check(ip)) {
+    return NextResponse.json(
+      { error: "Too many AI requests. Please wait a moment and try again." },
+      { status: 429 },
+    );
+  }
+
   const body = (await request.json()) as Partial<AIImproveRequest>;
   const input = body.input ?? "";
   const intent = body.intent;
@@ -41,12 +49,16 @@ export async function POST(request: Request) {
       route: completion.route,
       model: completion.model,
     });
-  } catch {
-    const result = cleanAIText(mockAIImprove(input, intent), body.maxChars);
-    return NextResponse.json({
-      result,
-      route: "mock_fallback",
-      model: "local-mock",
-    });
+  } catch (error) {
+    // Do NOT silently return mock/fallback text — surface the failure clearly.
+    console.error("[AI improve] failed:", error instanceof Error ? error.message : error);
+    return NextResponse.json(
+      {
+        error: "AI service is temporarily unavailable. Please try again later.",
+        route: "error",
+        model: "none",
+      },
+      { status: 503 },
+    );
   }
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { setSessionCookie, toAuthUser } from "@/lib/server/auth";
 import { apiError } from "@/lib/server/http";
 import { usersCollection } from "@/lib/server/mongodb";
+import { authLimiter, getClientIp } from "@/lib/server/rate-limit";
 
 type SignInBody = {
   email?: string;
@@ -10,6 +11,11 @@ type SignInBody = {
 };
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  if (!authLimiter.check(ip)) {
+    return apiError("Too many login attempts. Please try again later.", 429);
+  }
+
   try {
     const body = (await request.json()) as SignInBody;
     const email = body.email?.trim().toLowerCase() ?? "";

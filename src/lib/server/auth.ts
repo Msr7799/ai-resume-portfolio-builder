@@ -17,7 +17,17 @@ type SessionPayload = {
 };
 
 function authSecret() {
-  return process.env.AUTH_SECRET || process.env.LLM_API_KEY || "dev-only-change-this-secret";
+  const secret = process.env.AUTH_SECRET || process.env.LLM_API_KEY;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "AUTH_SECRET environment variable is required in production. " +
+        "Set a strong random value (e.g. `openssl rand -base64 32`)."
+      );
+    }
+    return "dev-only-change-this-secret";
+  }
+  return secret;
 }
 
 function base64UrlEncode(value: string) {
